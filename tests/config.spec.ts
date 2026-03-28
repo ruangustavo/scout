@@ -47,8 +47,9 @@ describe("saveConfig and loadConfig", () => {
     expect(loaded).toEqual(config);
   });
 
-  test("loadConfig throws when file does not exist", async () => {
-    expect(loadConfig(join(tmpDir, "missing.json"))).rejects.toThrow();
+  test("loadConfig returns empty config when file does not exist", async () => {
+    const config = await loadConfig(join(tmpDir, "missing.json"));
+    expect(config).toEqual({ repos: [] });
   });
 });
 

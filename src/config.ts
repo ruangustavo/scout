@@ -17,8 +17,12 @@ export function emptyConfig(): ScoutConfig {
 }
 
 export async function loadConfig(configPath: string): Promise<ScoutConfig> {
-  const raw = await readFile(configPath, "utf-8");
-  return JSON.parse(raw) as ScoutConfig;
+  try {
+    const raw = await readFile(configPath, "utf-8");
+    return JSON.parse(raw) as ScoutConfig;
+  } catch {
+    return emptyConfig();
+  }
 }
 
 export async function saveConfig(configPath: string, config: ScoutConfig): Promise<void> {
