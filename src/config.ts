@@ -12,6 +12,7 @@ export interface ScoutConfig {
   repos: RepoEntry[];
 }
 
+/** Returns a fresh object each call to prevent shared-reference mutation bugs. */
 export function emptyConfig(): ScoutConfig {
   return { repos: [] };
 }
