@@ -9,7 +9,6 @@ export const descriptor: AgentDescriptor = {
   name: "claude",
   displayName: "Claude Code",
   detectPaths: [join(homedir(), ".claude")],
-  supportsPassiveAwareness: true,
 };
 
 function generateSkillContent(reposDir: string): string {

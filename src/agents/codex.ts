@@ -1,7 +1,9 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import type { AgentDescriptor } from "./descriptor.ts";
+
+const SCOUT_MARKER = "## Scout - Source Code Repository Cache";
 
 export const descriptor: AgentDescriptor = {
   name: "codex",
@@ -10,7 +12,6 @@ export const descriptor: AgentDescriptor = {
     join(homedir(), ".codex"),
     ...(process.env["CODEX_HOME"] ? [process.env["CODEX_HOME"]] : []),
   ],
-  supportsPassiveAwareness: false,
 };
 
 function generateSkillContent(reposDir: string): string {
@@ -43,6 +44,13 @@ Each repo is at: ${reposDir}/<owner>/<repo>
 `;
 }
 
+function generateInstructionsSection(reposDir: string): string {
+  return `## Scout - Source Code Repository Cache
+
+You have access to locally cached source code repositories managed by Scout. When the user asks about a library's internals, implementation, or source code, run \`scout list\` to check if the repo is available. If it is, run \`scout update <repo>\` first, then use shell commands (\`cat\`, \`grep\`, \`find\`) on \`${reposDir}/<owner>/<repo>\` to answer. If the repo isn't cached, suggest the user run \`scout add <github-url>\`. When no specific repo is mentioned, infer the relevant repo from conversation context.
+`;
+}
+
 export async function installSkill(reposDir: string, baseDir?: string): Promise<void> {
   const dir = join(baseDir ?? join(homedir(), ".agents"), "skills", "scout");
   await mkdir(dir, { recursive: true });
@@ -54,10 +62,48 @@ export async function uninstallSkill(baseDir?: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
 }
 
-export async function injectInstructions(_reposDir: string, _baseDir?: string): Promise<void> {
-  // Codex has no global instructions file
+export async function injectInstructions(reposDir: string, baseDir?: string): Promise<void> {
+  const codexDir = baseDir ?? join(homedir(), ".codex");
+  const mdPath = join(codexDir, "AGENTS.md");
+
+  await mkdir(codexDir, { recursive: true });
+
+  let existing = "";
+  try {
+    existing = await readFile(mdPath, "utf-8");
+  } catch {
+    // File doesn't exist yet
+  }
+
+  if (!existing.includes(SCOUT_MARKER)) {
+    const section = generateInstructionsSection(reposDir);
+    const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n\n" : "\n";
+    const content = existing.length > 0 ? existing + separator + section : section;
+    await writeFile(mdPath, content, "utf-8");
+  }
 }
 
-export async function removeInstructions(_baseDir?: string): Promise<void> {
-  // Codex has no global instructions file
+export async function removeInstructions(baseDir?: string): Promise<void> {
+  const codexDir = baseDir ?? join(homedir(), ".codex");
+  const mdPath = join(codexDir, "AGENTS.md");
+
+  let existing = "";
+  try {
+    existing = await readFile(mdPath, "utf-8");
+  } catch {
+    return;
+  }
+
+  const markerIndex = existing.indexOf(SCOUT_MARKER);
+  if (markerIndex === -1) return;
+
+  const before = existing.slice(0, markerIndex).replace(/\n+$/, "");
+  const afterMarker = existing.slice(markerIndex + SCOUT_MARKER.length);
+  const nextHeadingMatch = afterMarker.match(/\n## /);
+  const after = nextHeadingMatch?.index !== undefined
+    ? afterMarker.slice(nextHeadingMatch.index)
+    : "";
+
+  const result = (before + after).trim();
+  await writeFile(mdPath, result.length > 0 ? result + "\n" : "", "utf-8");
 }

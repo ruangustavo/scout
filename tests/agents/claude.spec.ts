@@ -20,9 +20,6 @@ describe("claude descriptor", () => {
     expect(claude.descriptor.displayName).toBe("Claude Code");
   });
 
-  test("supports passive awareness", () => {
-    expect(claude.descriptor.supportsPassiveAwareness).toBe(true);
-  });
 });
 
 describe("installSkill", () => {

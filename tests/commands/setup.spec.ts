@@ -26,7 +26,6 @@ function makeTestAgent(
       name,
       displayName,
       detectPaths: [],
-      supportsPassiveAwareness: name === "claude",
     },
     async installSkill(reposDir: string) {
       calls.push(`${name}:installSkill:${reposDir}`);
@@ -73,6 +72,7 @@ describe("setupAction", () => {
     expect(calls).toContain(`claude:installSkill:${scoutPaths.reposDir}`);
     expect(calls).toContain(`claude:injectInstructions:${scoutPaths.reposDir}`);
     expect(calls).toContain(`codex:installSkill:${scoutPaths.reposDir}`);
+    expect(calls).toContain(`codex:injectInstructions:${scoutPaths.reposDir}`);
   });
 
   test("does not fail when no agents are provided", async () => {

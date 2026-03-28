@@ -30,10 +30,8 @@ export async function setupAction(
     await agent.installSkill(scoutPaths.reposDir);
     console.log(pc.green("✓"), `Installed skill for ${agent.descriptor.displayName}`);
 
-    if (agent.descriptor.supportsPassiveAwareness) {
-      await agent.injectInstructions(scoutPaths.reposDir);
-      console.log(pc.green("✓"), `Injected instructions for ${agent.descriptor.displayName}`);
-    }
+    await agent.injectInstructions(scoutPaths.reposDir);
+    console.log(pc.green("✓"), `Injected instructions for ${agent.descriptor.displayName}`);
   }
 
   console.log(

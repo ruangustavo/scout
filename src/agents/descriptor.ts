@@ -6,7 +6,6 @@ export interface AgentDescriptor {
   name: AgentName;
   displayName: string;
   detectPaths: string[];
-  supportsPassiveAwareness: boolean;
 }
 
 export interface AgentModule {

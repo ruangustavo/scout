@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, readFile, stat, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as codex from "@/agents/codex.ts";
@@ -20,9 +20,6 @@ describe("codex descriptor", () => {
     expect(codex.descriptor.displayName).toBe("Codex");
   });
 
-  test("does not support passive awareness", () => {
-    expect(codex.descriptor.supportsPassiveAwareness).toBe(false);
-  });
 });
 
 describe("installSkill", () => {
@@ -58,14 +55,87 @@ describe("uninstallSkill", () => {
 });
 
 describe("injectInstructions", () => {
-  test("is a no-op", async () => {
-    const agentsDir = join(tmpDir, ".agents");
-    await mkdir(agentsDir, { recursive: true });
+  test("creates AGENTS.md with scout section when file doesn't exist", async () => {
+    const codexDir = join(tmpDir, ".codex");
 
-    // Should not throw, should not create any files
-    await codex.injectInstructions("/home/user/.scout/repos", agentsDir);
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
 
-    const files = await readFile(join(agentsDir, "AGENTS.md"), "utf-8").catch(() => null);
-    expect(files).toBeNull();
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    expect(content).toContain("## Scout - Source Code Repository Cache");
+    expect(content).toContain("/home/user/.scout/repos");
+  });
+
+  test("preserves existing AGENTS.md content", async () => {
+    const codexDir = join(tmpDir, ".codex");
+    await mkdir(codexDir, { recursive: true });
+    await writeFile(join(codexDir, "AGENTS.md"), "# Existing\n\nKeep this.\n");
+
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
+
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    expect(content).toContain("# Existing");
+    expect(content).toContain("Keep this.");
+    expect(content).toContain("## Scout");
+  });
+
+  test("is idempotent", async () => {
+    const codexDir = join(tmpDir, ".codex");
+
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
+
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    const matches = content.match(/## Scout - Source Code Repository Cache/g);
+    expect(matches).toHaveLength(1);
+  });
+
+  test("references shell commands for file operations", async () => {
+    const codexDir = join(tmpDir, ".codex");
+
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
+
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    expect(content).toContain("shell commands");
+  });
+});
+
+describe("removeInstructions", () => {
+  test("removes scout section from AGENTS.md", async () => {
+    const codexDir = join(tmpDir, ".codex");
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
+    await codex.removeInstructions(codexDir);
+
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    expect(content).not.toContain("## Scout");
+  });
+
+  test("preserves other content when removing", async () => {
+    const codexDir = join(tmpDir, ".codex");
+    await mkdir(codexDir, { recursive: true });
+    await writeFile(join(codexDir, "AGENTS.md"), "# My Config\n\nKeep this.\n");
+
+    await codex.injectInstructions("/home/user/.scout/repos", codexDir);
+    await codex.removeInstructions(codexDir);
+
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    expect(content).toContain("# My Config");
+    expect(content).toContain("Keep this.");
+    expect(content).not.toContain("## Scout");
+  });
+
+  test("no-ops when file doesn't exist", async () => {
+    const codexDir = join(tmpDir, ".codex");
+    await expect(codex.removeInstructions(codexDir)).resolves.toBeUndefined();
+  });
+
+  test("no-ops when marker not present", async () => {
+    const codexDir = join(tmpDir, ".codex");
+    await mkdir(codexDir, { recursive: true });
+    await writeFile(join(codexDir, "AGENTS.md"), "# No scout here\n");
+
+    await codex.removeInstructions(codexDir);
+
+    const content = await readFile(join(codexDir, "AGENTS.md"), "utf-8");
+    expect(content).toBe("# No scout here\n");
   });
 });
