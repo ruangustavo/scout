@@ -44,6 +44,20 @@ describe("parseGitHubUrl", () => {
     });
   });
 
+  test("parses HTTPS URL with trailing slash", () => {
+    expect(parseGitHubUrl("https://github.com/vercel/next.js/")).toEqual({
+      owner: "vercel",
+      repo: "next.js",
+    });
+  });
+
+  test("parses HTTPS URL with .git suffix and trailing slash", () => {
+    expect(parseGitHubUrl("https://github.com/honojs/hono.git/")).toEqual({
+      owner: "honojs",
+      repo: "hono",
+    });
+  });
+
   test("throws on invalid URL", () => {
     expect(() => parseGitHubUrl("not-a-url")).toThrow("Invalid GitHub URL");
   });

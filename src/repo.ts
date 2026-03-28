@@ -8,7 +8,7 @@ const execFile = promisify(execFileCb);
 const STALENESS_MS = 60 * 60 * 1000;
 
 export function parseGitHubUrl(url: string): { owner: string; repo: string } {
-  const cleaned = url.replace(/\.git$/, "");
+  const cleaned = url.replace(/\/+$/, "").replace(/\.git$/, "");
 
   const httpsMatch = cleaned.match(/github\.com\/([^/]+)\/([^/]+)$/);
   if (httpsMatch) {
