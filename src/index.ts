@@ -1,5 +1,6 @@
 import { Command } from "commander";
-import { resolveScoutPaths, resolveClaudePaths } from "./paths.ts";
+import { resolveScoutPaths } from "./paths.ts";
+import { detectInstalledAgents } from "./agents/index.ts";
 import { setupAction } from "./commands/setup.ts";
 import { addAction } from "./commands/add.ts";
 import { removeAction } from "./commands/remove.ts";
@@ -7,20 +8,20 @@ import { listAction } from "./commands/list.ts";
 import { updateAction } from "./commands/update.ts";
 
 const scoutPaths = resolveScoutPaths();
-const claudePaths = resolveClaudePaths();
 
 const program = new Command();
 
 program
   .name("scout")
-  .description("Manage a local cache of GitHub repositories for Claude Code")
+  .description("Manage a local cache of GitHub repositories for AI coding agents")
   .version("1.0.0");
 
 program
   .command("setup")
-  .description("Initialize Scout and install Claude Code skill")
+  .description("Initialize Scout and install skills for detected agents")
   .action(async () => {
-    await setupAction(scoutPaths, claudePaths);
+    const agents = await detectInstalledAgents();
+    await setupAction(scoutPaths, agents);
   });
 
 program

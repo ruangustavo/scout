@@ -1,15 +1,12 @@
 import pc from "picocolors";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
 import { saveConfig, emptyConfig } from "../config.ts";
-import { generateSkillContent, generateClaudeMdSection } from "../skill.ts";
-import type { ScoutPaths, ClaudePaths } from "../paths.ts";
-
-const SCOUT_MARKER = "## Scout - Source Code Repository Cache";
+import type { ScoutPaths } from "../paths.ts";
+import type { AgentModule } from "../agents/descriptor.ts";
 
 export async function setupAction(
   scoutPaths: ScoutPaths,
-  claudePaths: ClaudePaths,
+  detectedAgents: AgentModule[],
 ): Promise<void> {
   await mkdir(scoutPaths.reposDir, { recursive: true });
 
@@ -22,25 +19,21 @@ export async function setupAction(
     console.log(pc.green("✓"), "Created config at", pc.dim(scoutPaths.configPath));
   }
 
-  await mkdir(dirname(claudePaths.skillPath), { recursive: true });
-  await writeFile(claudePaths.skillPath, generateSkillContent(scoutPaths.reposDir), "utf-8");
-  console.log(pc.green("✓"), "Installed skill at", pc.dim(claudePaths.skillPath));
-
-  await mkdir(dirname(claudePaths.claudeMdPath), { recursive: true });
-
-  let existing = "";
-  try {
-    existing = await readFile(claudePaths.claudeMdPath, "utf-8");
-  } catch {
-    // File doesn't exist yet
+  if (detectedAgents.length === 0) {
+    console.log(
+      pc.yellow("⚠"),
+      "No supported agents detected. Supported agents: Claude Code, Codex",
+    );
   }
 
-  if (!existing.includes(SCOUT_MARKER)) {
-    const section = generateClaudeMdSection(scoutPaths.reposDir);
-    const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n\n" : "\n";
-    const content = existing.length > 0 ? existing + separator + section : section;
-    await writeFile(claudePaths.claudeMdPath, content, "utf-8");
-    console.log(pc.green("✓"), "Added Scout section to", pc.dim(claudePaths.claudeMdPath));
+  for (const agent of detectedAgents) {
+    await agent.installSkill(scoutPaths.reposDir);
+    console.log(pc.green("✓"), `Installed skill for ${agent.descriptor.displayName}`);
+
+    if (agent.descriptor.supportsPassiveAwareness) {
+      await agent.injectInstructions(scoutPaths.reposDir);
+      console.log(pc.green("✓"), `Injected instructions for ${agent.descriptor.displayName}`);
+    }
   }
 
   console.log(

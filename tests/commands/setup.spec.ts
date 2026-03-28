@@ -2,8 +2,9 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { resolveScoutPaths, resolveClaudePaths } from "@/paths.ts";
+import { resolveScoutPaths } from "@/paths.ts";
 import { setupAction } from "@/commands/setup.ts";
+import type { AgentModule } from "@/agents/descriptor.ts";
 
 let tmpDir: string;
 
@@ -15,12 +16,37 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
+function makeTestAgent(
+  name: "claude" | "codex",
+  displayName: string,
+  calls: string[],
+): AgentModule {
+  return {
+    descriptor: {
+      name,
+      displayName,
+      detectPaths: [],
+      supportsPassiveAwareness: name === "claude",
+    },
+    async installSkill(reposDir: string) {
+      calls.push(`${name}:installSkill:${reposDir}`);
+    },
+    async uninstallSkill() {
+      calls.push(`${name}:uninstallSkill`);
+    },
+    async injectInstructions(reposDir: string) {
+      calls.push(`${name}:injectInstructions:${reposDir}`);
+    },
+    async removeInstructions() {
+      calls.push(`${name}:removeInstructions`);
+    },
+  };
+}
+
 describe("setupAction", () => {
   test("creates scout directory structure", async () => {
     const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const claudePaths = resolveClaudePaths(join(tmpDir, ".claude"));
-
-    await setupAction(scoutPaths, claudePaths);
+    await setupAction(scoutPaths, []);
 
     const reposDirExists = await stat(scoutPaths.reposDir).then(() => true).catch(() => false);
     expect(reposDirExists).toBe(true);
@@ -28,60 +54,33 @@ describe("setupAction", () => {
 
   test("creates empty config.json", async () => {
     const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const claudePaths = resolveClaudePaths(join(tmpDir, ".claude"));
-
-    await setupAction(scoutPaths, claudePaths);
+    await setupAction(scoutPaths, []);
 
     const config = JSON.parse(await readFile(scoutPaths.configPath, "utf-8"));
     expect(config).toEqual({ repos: [] });
   });
 
-  test("creates Claude Code skill file", async () => {
+  test("calls installSkill and injectInstructions for each agent", async () => {
     const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const claudePaths = resolveClaudePaths(join(tmpDir, ".claude"));
+    const calls: string[] = [];
+    const agents = [
+      makeTestAgent("claude", "Claude Code", calls),
+      makeTestAgent("codex", "Codex", calls),
+    ];
 
-    await setupAction(scoutPaths, claudePaths);
+    await setupAction(scoutPaths, agents);
 
-    const skill = await readFile(claudePaths.skillPath, "utf-8");
-    expect(skill).toContain("scout list");
-    expect(skill).toContain(scoutPaths.reposDir);
+    expect(calls).toContain(`claude:installSkill:${scoutPaths.reposDir}`);
+    expect(calls).toContain(`claude:injectInstructions:${scoutPaths.reposDir}`);
+    expect(calls).toContain(`codex:installSkill:${scoutPaths.reposDir}`);
   });
 
-  test("appends section to CLAUDE.md", async () => {
+  test("does not fail when no agents are provided", async () => {
     const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const claudePaths = resolveClaudePaths(join(tmpDir, ".claude"));
+    await setupAction(scoutPaths, []);
 
-    await setupAction(scoutPaths, claudePaths);
-
-    const claudeMd = await readFile(claudePaths.claudeMdPath, "utf-8");
-    expect(claudeMd).toContain("Scout");
-    expect(claudeMd).toContain(scoutPaths.reposDir);
-  });
-
-  test("appends to existing CLAUDE.md without overwriting", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const claudePaths = resolveClaudePaths(join(tmpDir, ".claude"));
-
-    await mkdir(join(tmpDir, ".claude"), { recursive: true });
-    await writeFile(claudePaths.claudeMdPath, "# Existing Content\n\nKeep this.\n");
-
-    await setupAction(scoutPaths, claudePaths);
-
-    const claudeMd = await readFile(claudePaths.claudeMdPath, "utf-8");
-    expect(claudeMd).toContain("# Existing Content");
-    expect(claudeMd).toContain("Keep this.");
-    expect(claudeMd).toContain("Scout");
-  });
-
-  test("is idempotent — running twice does not duplicate CLAUDE.md section", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const claudePaths = resolveClaudePaths(join(tmpDir, ".claude"));
-
-    await setupAction(scoutPaths, claudePaths);
-    await setupAction(scoutPaths, claudePaths);
-
-    const claudeMd = await readFile(claudePaths.claudeMdPath, "utf-8");
-    const matches = claudeMd.match(/## Scout - Source Code Repository Cache/g);
-    expect(matches).toHaveLength(1);
+    // Should still create scout dirs and config
+    const config = JSON.parse(await readFile(scoutPaths.configPath, "utf-8"));
+    expect(config).toEqual({ repos: [] });
   });
 });
