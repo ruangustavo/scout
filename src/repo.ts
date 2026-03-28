@@ -11,10 +11,16 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } {
   const cleaned = url.replace(/\.git$/, "");
 
   const httpsMatch = cleaned.match(/github\.com\/([^/]+)\/([^/]+)$/);
-  if (httpsMatch) return { owner: httpsMatch[1]!, repo: httpsMatch[2]! };
+  if (httpsMatch) {
+    const [, owner, repo] = httpsMatch;
+    if (owner && repo) return { owner, repo };
+  }
 
   const sshMatch = cleaned.match(/github\.com:([^/]+)\/([^/]+)$/);
-  if (sshMatch) return { owner: sshMatch[1]!, repo: sshMatch[2]! };
+  if (sshMatch) {
+    const [, owner, repo] = sshMatch;
+    if (owner && repo) return { owner, repo };
+  }
 
   throw new Error(`Invalid GitHub URL: ${url}`);
 }
