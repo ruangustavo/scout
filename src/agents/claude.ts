@@ -97,8 +97,8 @@ export async function removeInstructions(baseDir?: string): Promise<void> {
   const before = existing.slice(0, markerIndex).replace(/\n+$/, "");
   const afterMarker = existing.slice(markerIndex + SCOUT_MARKER.length);
   const nextHeadingMatch = afterMarker.match(/\n## /);
-  const after = nextHeadingMatch
-    ? afterMarker.slice(nextHeadingMatch.index!)
+  const after = nextHeadingMatch?.index !== undefined
+    ? afterMarker.slice(nextHeadingMatch.index)
     : "";
 
   const result = (before + after).trim();
