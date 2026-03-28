@@ -1,6 +1,7 @@
 import pc from "picocolors";
 import { rm } from "node:fs/promises";
 import { loadConfig, saveConfig, findRepo, removeRepo } from "../config.ts";
+import { createSpinner } from "../spinner.ts";
 import type { ScoutPaths } from "../paths.ts";
 
 export async function removeAction(name: string, paths: ScoutPaths): Promise<void> {
@@ -13,7 +14,18 @@ export async function removeAction(name: string, paths: ScoutPaths): Promise<voi
     return;
   }
 
-  await rm(entry.path, { recursive: true, force: true });
+  const spinner = createSpinner(`Removing ${pc.cyan(name)}...`);
+
+  try {
+    await rm(entry.path, { recursive: true, force: true });
+  } catch (error) {
+    spinner.stop();
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(pc.red(`Failed to remove ${pc.bold(name)}:`), message);
+    return;
+  }
+
+  spinner.stop();
 
   const updated = removeRepo(config, name);
   await saveConfig(paths.configPath, updated);

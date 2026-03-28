@@ -1,6 +1,7 @@
 import pc from "picocolors";
 import { loadConfig, saveConfig, findRepo } from "../config.ts";
 import { isStale, updateRepo } from "../repo.ts";
+import { createSpinner } from "../spinner.ts";
 import type { ScoutPaths } from "../paths.ts";
 
 export async function updateAction(
@@ -22,8 +23,9 @@ export async function updateAction(
       return;
     }
 
-    console.log(`Updating ${pc.cyan(name)}...`);
+    const spinner = createSpinner(`Updating ${pc.cyan(name)}...`);
     await updateRepo(entry.path, entry.branch);
+    spinner.stop();
     entry.lastUpdated = new Date().toISOString();
     await saveConfig(paths.configPath, config);
     console.log(pc.green("✓"), `Updated ${pc.bold(name)}`);
@@ -34,8 +36,9 @@ export async function updateAction(
   for (const entry of config.repos) {
     if (!isStale(entry.lastUpdated)) continue;
 
-    console.log(`Updating ${pc.cyan(entry.name)}...`);
+    const spinner = createSpinner(`Updating ${pc.cyan(entry.name)}...`);
     await updateRepo(entry.path, entry.branch);
+    spinner.stop();
     entry.lastUpdated = new Date().toISOString();
     updatedCount++;
   }

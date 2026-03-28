@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, saveConfig, findRepo, addRepo } from "../config.ts";
 import { parseGitHubUrl, cloneRepo, detectBranch } from "../repo.ts";
+import { createSpinner } from "../spinner.ts";
 import type { ScoutPaths } from "../paths.ts";
 
 export function resolveRepoName(url: string): string {
@@ -25,16 +26,19 @@ export async function addAction(
 
   const destPath = join(paths.reposDir, ...name.split("/"));
 
-  console.log(`Cloning ${pc.cyan(name)}...`);
+  const spinner = createSpinner(`Cloning ${pc.cyan(name)}...`);
 
   try {
     await cloneRepo(url, destPath);
   } catch (error) {
+    spinner.stop();
     await rm(destPath, { recursive: true, force: true }).catch(() => {});
     const message = error instanceof Error ? error.message : String(error);
     console.error(pc.red(`Failed to clone ${pc.bold(name)}:`), message);
     return;
   }
+
+  spinner.stop();
 
   const branch = await detectBranch(destPath);
 
