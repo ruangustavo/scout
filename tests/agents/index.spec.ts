@@ -32,9 +32,7 @@ describe("detectInstalledAgents", () => {
           detectPaths: [join(tmpDir, ".claude")],
         },
         installSkill: async () => {},
-        uninstallSkill: async () => {},
         injectInstructions: async () => {},
-        removeInstructions: async () => {},
       },
     ]);
     expect(detected).toHaveLength(0);
@@ -74,9 +72,7 @@ describe("detectInstalledAgents", () => {
           detectPaths: [join(tmpDir, ".claude")],
         },
         installSkill: async () => {},
-        uninstallSkill: async () => {},
         injectInstructions: async () => {},
-        removeInstructions: async () => {},
       },
       {
         descriptor: {
@@ -85,9 +81,7 @@ describe("detectInstalledAgents", () => {
           detectPaths: [join(tmpDir, ".codex")],
         },
         installSkill: async () => {},
-        uninstallSkill: async () => {},
         injectInstructions: async () => {},
-        removeInstructions: async () => {},
       },
     ];
 

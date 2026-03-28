@@ -1,9 +1,8 @@
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import type { AgentDescriptor } from "./descriptor.ts";
-
-const SCOUT_MARKER = "## Scout - Source Code Repository Cache";
+import { injectSection } from "./markdown.ts";
 
 export const descriptor: AgentDescriptor = {
   name: "claude",
@@ -53,53 +52,7 @@ export async function installSkill(reposDir: string, baseDir?: string): Promise<
   await writeFile(join(claudeDir, "commands", "scout.md"), generateSkillContent(reposDir), "utf-8");
 }
 
-export async function uninstallSkill(baseDir?: string): Promise<void> {
-  const claudeDir = baseDir ?? join(homedir(), ".claude");
-  await rm(join(claudeDir, "commands", "scout.md"), { force: true });
-}
-
 export async function injectInstructions(reposDir: string, baseDir?: string): Promise<void> {
   const claudeDir = baseDir ?? join(homedir(), ".claude");
-  const mdPath = join(claudeDir, "CLAUDE.md");
-
-  await mkdir(claudeDir, { recursive: true });
-
-  let existing = "";
-  try {
-    existing = await readFile(mdPath, "utf-8");
-  } catch {
-    // File doesn't exist yet
-  }
-
-  if (!existing.includes(SCOUT_MARKER)) {
-    const section = generateInstructionsSection(reposDir);
-    const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n\n" : "\n";
-    const content = existing.length > 0 ? existing + separator + section : section;
-    await writeFile(mdPath, content, "utf-8");
-  }
-}
-
-export async function removeInstructions(baseDir?: string): Promise<void> {
-  const claudeDir = baseDir ?? join(homedir(), ".claude");
-  const mdPath = join(claudeDir, "CLAUDE.md");
-
-  let existing = "";
-  try {
-    existing = await readFile(mdPath, "utf-8");
-  } catch {
-    return;
-  }
-
-  const markerIndex = existing.indexOf(SCOUT_MARKER);
-  if (markerIndex === -1) return;
-
-  const before = existing.slice(0, markerIndex).replace(/\n+$/, "");
-  const afterMarker = existing.slice(markerIndex + SCOUT_MARKER.length);
-  const nextHeadingMatch = afterMarker.match(/\n## /);
-  const after = nextHeadingMatch?.index !== undefined
-    ? afterMarker.slice(nextHeadingMatch.index)
-    : "";
-
-  const result = (before + after).trim();
-  await writeFile(mdPath, result.length > 0 ? result + "\n" : "", "utf-8");
+  await injectSection(join(claudeDir, "CLAUDE.md"), generateInstructionsSection(reposDir));
 }

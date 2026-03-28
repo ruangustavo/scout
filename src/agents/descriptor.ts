@@ -11,9 +11,7 @@ export interface AgentDescriptor {
 export interface AgentModule {
   descriptor: AgentDescriptor;
   installSkill(reposDir: string): Promise<void>;
-  uninstallSkill(): Promise<void>;
   injectInstructions(reposDir: string): Promise<void>;
-  removeInstructions(): Promise<void>;
 }
 
 export async function detect(paths: string[]): Promise<boolean> {

@@ -30,14 +30,8 @@ function makeTestAgent(
     async installSkill(reposDir: string) {
       calls.push(`${name}:installSkill:${reposDir}`);
     },
-    async uninstallSkill() {
-      calls.push(`${name}:uninstallSkill`);
-    },
     async injectInstructions(reposDir: string) {
       calls.push(`${name}:injectInstructions:${reposDir}`);
-    },
-    async removeInstructions() {
-      calls.push(`${name}:removeInstructions`);
     },
   };
 }
