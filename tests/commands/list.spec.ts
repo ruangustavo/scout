@@ -15,6 +15,14 @@ const SAMPLE_ENTRY: RepoEntry = {
   lastUpdated: "2026-03-28T15:00:00.000Z",
 };
 
+const SECOND_ENTRY: RepoEntry = {
+  name: "vercel/next.js",
+  url: "https://github.com/vercel/next.js",
+  path: "/tmp/.scout/repos/vercel/next.js",
+  branch: "canary",
+  lastUpdated: "2026-03-28T16:00:00.000Z",
+};
+
 let tmpDir: string;
 let logSpy: ReturnType<typeof spyOn>;
 let logs: string[];
@@ -50,5 +58,42 @@ describe("listAction", () => {
     await listAction(paths);
 
     expect(logs.some((l) => l.includes("honojs/hono"))).toBe(true);
+  });
+
+  test("filters repos by substring", async () => {
+    const paths = resolveScoutPaths(tmpDir);
+    const withFirstRepo = addRepo(emptyConfig(), SAMPLE_ENTRY);
+    const config = addRepo(withFirstRepo, SECOND_ENTRY);
+    await saveConfig(paths.configPath, config);
+
+    await listAction(paths, "hono");
+
+    expect(logs.some((l) => l.includes("honojs/hono"))).toBe(true);
+    expect(logs.some((l) => l.includes("vercel/next.js"))).toBe(false);
+  });
+
+  test("filters repos case-insensitively", async () => {
+    const paths = resolveScoutPaths(tmpDir);
+    const withFirstRepo = addRepo(emptyConfig(), SAMPLE_ENTRY);
+    const config = addRepo(withFirstRepo, SECOND_ENTRY);
+    await saveConfig(paths.configPath, config);
+
+    await listAction(paths, "HONO");
+
+    expect(logs.some((l) => l.includes("honojs/hono"))).toBe(true);
+    expect(logs.some((l) => l.includes("vercel/next.js"))).toBe(false);
+  });
+
+  test("prints a message when no repos match the query", async () => {
+    const paths = resolveScoutPaths(tmpDir);
+    const withFirstRepo = addRepo(emptyConfig(), SAMPLE_ENTRY);
+    const config = addRepo(withFirstRepo, SECOND_ENTRY);
+    await saveConfig(paths.configPath, config);
+
+    await listAction(paths, "express");
+
+    expect(logs.some((l) => l.includes('No cached repositories match "express".'))).toBe(true);
+    expect(logs.some((l) => l.includes("honojs/hono"))).toBe(false);
+    expect(logs.some((l) => l.includes("vercel/next.js"))).toBe(false);
   });
 });

@@ -26,6 +26,7 @@ You have access to locally cached GitHub repositories via Scout.
 ## Available Repos
 
 Run \`scout list\` to see all cached repositories and their locations.
+Run \`scout list <query>\` to filter cached repositories by a case-insensitive name match when there are many.
 
 ## Querying a Repo
 
@@ -46,7 +47,7 @@ Each repo is at: ${reposDir}/<owner>/<repo>
 function generateInstructionsSection(reposDir: string): string {
   return `## Scout - Source Code Repository Cache
 
-You have access to locally cached source code repositories managed by Scout. When the user asks about a library's internals, implementation, or source code, run \`scout list\` to check if the repo is available. If it is, run \`scout update <repo>\` first, then use shell commands (\`cat\`, \`grep\`, \`find\`) on \`${reposDir}/<owner>/<repo>\` to answer. If the repo isn't cached, suggest the user run \`scout add <github-url>\`. When no specific repo is mentioned, infer the relevant repo from conversation context.
+You have access to locally cached source code repositories managed by Scout. When the user asks about a library's internals, implementation, or source code, run \`scout list\` to check if the repo is available. If there are many cached repos, use \`scout list <query>\` to narrow the results by a case-insensitive repository name match. If the repo is available, run \`scout update <repo>\` first, then use shell commands (\`cat\`, \`grep\`, \`find\`) on \`${reposDir}/<owner>/<repo>\` to answer. If the repo isn't cached, suggest the user run \`scout add <github-url>\`. When no specific repo is mentioned, infer the relevant repo from conversation context.
 `;
 }
 

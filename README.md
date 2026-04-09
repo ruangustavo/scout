@@ -59,12 +59,16 @@ scout add https://github.com/honojs/hono
 
 Accepts HTTPS and SSH URLs. The repo is stored at `~/.scout/repos/<owner>/<repo>`.
 
-### `scout list`
+### `scout list [query]`
 
-List all cached repositories with their paths and last-updated timestamps.
+List all cached repositories with their paths and last-updated timestamps. When a
+query is provided, Scout filters repositories by name using a case-insensitive
+substring match.
 
 ```bash
 scout list
+scout list hono
+scout list next
 ```
 
 ### `scout update [name]`

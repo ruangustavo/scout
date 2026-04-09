@@ -29,6 +29,7 @@ describe("installSkill", () => {
 
     const content = await readFile(join(claudeDir, "commands", "scout.md"), "utf-8");
     expect(content).toContain("scout list");
+    expect(content).toContain("scout list <query>");
     expect(content).toContain("/home/user/.scout/repos");
   });
 });
@@ -42,6 +43,7 @@ describe("injectInstructions", () => {
 
     const content = await readFile(join(claudeDir, "CLAUDE.md"), "utf-8");
     expect(content).toContain("## Scout - Source Code Repository Cache");
+    expect(content).toContain("scout list <query>");
     expect(content).toContain("/home/user/.scout/repos");
   });
 

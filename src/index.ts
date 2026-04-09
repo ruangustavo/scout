@@ -42,9 +42,10 @@ program
 
 program
   .command("list")
+  .argument("[query]", "Filter repositories by name")
   .description("List all cached repositories")
-  .action(async () => {
-    await listAction(scoutPaths);
+  .action(async (query?: string) => {
+    await listAction(scoutPaths, query);
   });
 
 program
