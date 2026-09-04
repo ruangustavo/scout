@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "scout": "dist/index.mjs"
   },
   "scripts": {
     "build": "tsdown",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "commander": "^14.0.3",
