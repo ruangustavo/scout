@@ -1,102 +1,98 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, readFile, stat, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolveScoutPaths } from "@/paths.ts";
+import { join } from "node:path";
 import { setupAction } from "@/commands/setup.ts";
-import type { AgentModule } from "@/agents/descriptor.ts";
+import { resolveScoutPaths } from "@/paths.ts";
+import type { ScoutPaths } from "@/paths.ts";
 
-let tmpDir: string;
+let homeDir: string;
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "scout-setup-test-"));
+  homeDir = await mkdtemp(join(tmpdir(), "scout-setup-test-"));
 });
 
 afterEach(async () => {
-  await rm(tmpDir, { recursive: true, force: true });
+  mock.restore();
+  await rm(homeDir, { recursive: true, force: true });
 });
 
-function makeTestAgent(
-  name: "claude" | "codex",
-  displayName: string,
-  calls: string[],
-): AgentModule {
-  return {
-    descriptor: {
-      name,
-      displayName,
-      detectPaths: [],
-    },
-    async installSkill() {
-      calls.push(`${name}:installSkill`);
-    },
-    async injectInstructions(reposDir: string) {
-      calls.push(`${name}:injectInstructions:${reposDir}`);
-    },
-  };
+function scoutPaths(): ScoutPaths {
+  return resolveScoutPaths(join(homeDir, ".scout"));
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe("setupAction", () => {
-  test("creates scout directory structure", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    await setupAction(scoutPaths, []);
+  test("creates the cache and overwrites the canonical skill byte-for-byte", async () => {
+    const paths = scoutPaths();
+    const installedPath = join(homeDir, ".agents", "skills", "scout", "SKILL.md");
+    await mkdir(join(homeDir, ".agents", "skills", "scout"), { recursive: true });
+    await writeFile(installedPath, "stale skill");
 
-    const reposDirExists = await stat(scoutPaths.reposDir).then(() => true).catch(() => false);
-    expect(reposDirExists).toBe(true);
-  });
+    await setupAction(paths, homeDir);
+    await writeFile(installedPath, "stale again");
+    await setupAction(paths, homeDir);
 
-  test("creates empty config.json", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    await setupAction(scoutPaths, []);
-
-    const config = JSON.parse(await readFile(scoutPaths.configPath, "utf-8"));
-    expect(config).toEqual({ repos: [] });
-  });
-
-  test("calls installSkill and injectInstructions for each agent", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const calls: string[] = [];
-    const agents = [
-      makeTestAgent("claude", "Claude Code", calls),
-      makeTestAgent("codex", "Codex", calls),
-    ];
-
-    await setupAction(scoutPaths, agents);
-
-    expect(calls).toContain("claude:installSkill");
-    expect(calls).toContain(`claude:injectInstructions:${scoutPaths.reposDir}`);
-    expect(calls).toContain("codex:installSkill");
-    expect(calls).toContain(`codex:injectInstructions:${scoutPaths.reposDir}`);
-  });
-
-  test("writes content byte-identical to the packaged skill", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    const installedPath = join(tmpDir, "installed", "SKILL.md");
-    const agent: AgentModule = {
-      descriptor: { name: "codex", displayName: "Codex", detectPaths: [] },
-      async installSkill(skillContent: string) {
-        await mkdir(join(tmpDir, "installed"), { recursive: true });
-        await writeFile(installedPath, skillContent, "utf-8");
-      },
-      async injectInstructions() {},
-    };
-
-    await setupAction(scoutPaths, [agent]);
-
-    const packagedPath = new URL("../../skills/scout/SKILL.md", import.meta.url);
-    const [installed, packaged] = await Promise.all([
+    const [config, installedSkill, packagedSkill, claudeExists] = await Promise.all([
+      readFile(paths.configPath, "utf-8"),
       readFile(installedPath),
-      readFile(packagedPath),
+      readFile(new URL("../../skills/scout/SKILL.md", import.meta.url)),
+      pathExists(join(homeDir, ".claude")),
     ]);
-    expect(installed.equals(packaged)).toBe(true);
+    expect(JSON.parse(config)).toEqual({ repos: [] });
+    expect(installedSkill.equals(packagedSkill)).toBe(true);
+    expect(claudeExists).toBe(false);
+    expect(await stat(paths.reposDir)).toBeDefined();
   });
 
-  test("does not fail when no agents are provided", async () => {
-    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
-    await setupAction(scoutPaths, []);
+  test("creates Claude Code's relative symlink when .claude exists", async () => {
+    await mkdir(join(homeDir, ".claude"));
 
-    // Should still create scout dirs and config
-    const config = JSON.parse(await readFile(scoutPaths.configPath, "utf-8"));
-    expect(config).toEqual({ repos: [] });
+    await setupAction(scoutPaths(), homeDir);
+
+    expect(await readlink(join(homeDir, ".claude", "skills", "scout"))).toBe(
+      "../../.agents/skills/scout",
+    );
+  });
+
+  test("leaves an existing correct Claude Code symlink unchanged and silent", async () => {
+    const linkPath = join(homeDir, ".claude", "skills", "scout");
+    await mkdir(join(homeDir, ".claude", "skills"), { recursive: true });
+    await symlink("../../.agents/skills/scout", linkPath, "dir");
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+
+    await setupAction(scoutPaths(), homeDir);
+
+    expect(await readlink(linkPath)).toBe("../../.agents/skills/scout");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test("warns and preserves a real directory at Claude Code's skill path", async () => {
+    const conflictPath = join(homeDir, ".claude", "skills", "scout");
+    await mkdir(conflictPath, { recursive: true });
+    await writeFile(join(conflictPath, "keep.txt"), "keep");
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+
+    await setupAction(scoutPaths(), homeDir);
+
+    expect(await readFile(join(conflictPath, "keep.txt"), "utf-8")).toBe("keep");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(conflictPath));
   });
 });

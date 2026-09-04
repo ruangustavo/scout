@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import packageJson from "../package.json" with { type: "json" };
 import { resolveScoutPaths } from "./paths.ts";
-import { detectInstalledAgents } from "./agents/index.ts";
 import { setupAction } from "./commands/setup.ts";
 import { addAction } from "./commands/add.ts";
 import { removeAction } from "./commands/remove.ts";
@@ -19,10 +18,9 @@ program
 
 program
   .command("setup")
-  .description("Initialize Scout and install skills for detected agents")
+  .description("Initialize Scout and install its skill")
   .action(async () => {
-    const agents = await detectInstalledAgents();
-    await setupAction(scoutPaths, agents);
+    await setupAction(scoutPaths);
   });
 
 program
