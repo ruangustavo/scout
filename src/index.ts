@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import packageJson from "../package.json" with { type: "json" };
 import { resolveScoutPaths } from "./paths.ts";
 import { detectInstalledAgents } from "./agents/index.ts";
 import { setupAction } from "./commands/setup.ts";
@@ -14,7 +15,7 @@ const program = new Command();
 program
   .name("scout")
   .description("Manage a local cache of GitHub repositories for AI coding agents")
-  .version("1.0.0");
+  .version(packageJson.version);
 
 program
   .command("setup")

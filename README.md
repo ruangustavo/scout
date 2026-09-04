@@ -10,6 +10,8 @@ Scout solves this by keeping shallow clones of repositories you care about in `~
 
 ## Installation
 
+Scout supports Node.js 20 or newer and Bun.
+
 Scout is not yet published to npm. To use it locally:
 
 ```bash
@@ -134,4 +136,5 @@ If Codex uses a custom home directory, set the `CODEX_HOME` environment variable
 bun install          # install dependencies
 bun run build        # build to dist/
 bun test             # run tests
+bun run typecheck    # check TypeScript types
 ```

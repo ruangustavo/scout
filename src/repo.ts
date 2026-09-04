@@ -1,5 +1,9 @@
-import { mkdir } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { Readable } from "node:stream";
+import { text } from "node:stream/consumers";
+import { pipeline } from "node:stream/promises";
 
 const STALENESS_MS = 60 * 60 * 1000;
 
@@ -72,15 +76,14 @@ async function cloneViaTarball(
     throw new Error(`tarball ${tarballUrl} failed: ${tarballRes.status}`);
   }
 
-  const tarProc = Bun.spawn(["tar", "-xz", "--strip-components=1", "-C", destPath], {
-    stdin: tarballRes,
-    stdout: "ignore",
-    stderr: "pipe",
+  const tarProc = spawn("tar", ["-xz", "--strip-components=1", "-C", destPath], {
+    stdio: ["pipe", "ignore", "pipe"],
   });
 
   const [stderr, exitCode] = await Promise.all([
-    tarProc.stderr.text(),
-    tarProc.exited,
+    text(tarProc.stderr),
+    waitForExit(tarProc),
+    pipeline(Readable.fromWeb(tarballRes.body), tarProc.stdin),
     initMinimalGitDir(destPath, url, branch),
   ]);
 
@@ -100,8 +103,8 @@ async function initMinimalGitDir(destPath: string, url: string, branch: string):
   ]);
 
   await Promise.all([
-    Bun.write(join(gitDir, "HEAD"), `ref: refs/heads/${branch}\n`),
-    Bun.write(
+    writeFile(join(gitDir, "HEAD"), `ref: refs/heads/${branch}\n`),
+    writeFile(
       join(gitDir, "config"),
       [
         "[core]",
@@ -145,28 +148,36 @@ export async function detectBranch(repoPath: string): Promise<string> {
     // unborn HEAD — fall through to reading .git/HEAD
   }
 
-  const head = await Bun.file(join(repoPath, ".git", "HEAD")).text();
+  const head = await readFile(join(repoPath, ".git", "HEAD"), "utf8");
   const match = head.match(/^ref: refs\/heads\/(.+)$/m);
   if (!match?.[1]) throw new Error(`could not detect branch from ${repoPath}`);
   return match[1];
 }
 
 async function runGit(args: string[], cwd?: string): Promise<string> {
-  const proc = Bun.spawn(["git", ...args], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
+  const process = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
   const [stdout, stderr, exitCode] = await Promise.all([
-    proc.stdout.text(),
-    proc.stderr.text(),
-    proc.exited,
+    text(process.stdout),
+    text(process.stderr),
+    waitForExit(process),
   ]);
 
   if (exitCode !== 0) {
     throw new Error(`git ${args.join(" ")} failed (${exitCode}): ${stderr.trim()}`);
   }
-  
+
   return stdout;
+}
+
+function waitForExit(process: ReturnType<typeof spawn>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    process.once("error", reject);
+    process.once("close", (code) => {
+      if (code === null) {
+        reject(new Error("process exited without a status code"));
+        return;
+      }
+      resolve(code);
+    });
+  });
 }
