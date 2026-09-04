@@ -27,8 +27,8 @@ function makeTestAgent(
       displayName,
       detectPaths: [],
     },
-    async installSkill(reposDir: string) {
-      calls.push(`${name}:installSkill:${reposDir}`);
+    async installSkill() {
+      calls.push(`${name}:installSkill`);
     },
     async injectInstructions(reposDir: string) {
       calls.push(`${name}:injectInstructions:${reposDir}`);
@@ -63,10 +63,32 @@ describe("setupAction", () => {
 
     await setupAction(scoutPaths, agents);
 
-    expect(calls).toContain(`claude:installSkill:${scoutPaths.reposDir}`);
+    expect(calls).toContain("claude:installSkill");
     expect(calls).toContain(`claude:injectInstructions:${scoutPaths.reposDir}`);
-    expect(calls).toContain(`codex:installSkill:${scoutPaths.reposDir}`);
+    expect(calls).toContain("codex:installSkill");
     expect(calls).toContain(`codex:injectInstructions:${scoutPaths.reposDir}`);
+  });
+
+  test("writes content byte-identical to the packaged skill", async () => {
+    const scoutPaths = resolveScoutPaths(join(tmpDir, ".scout"));
+    const installedPath = join(tmpDir, "installed", "SKILL.md");
+    const agent: AgentModule = {
+      descriptor: { name: "codex", displayName: "Codex", detectPaths: [] },
+      async installSkill(skillContent: string) {
+        await mkdir(join(tmpDir, "installed"), { recursive: true });
+        await writeFile(installedPath, skillContent, "utf-8");
+      },
+      async injectInstructions() {},
+    };
+
+    await setupAction(scoutPaths, [agent]);
+
+    const packagedPath = new URL("../../skills/scout/SKILL.md", import.meta.url);
+    const [installed, packaged] = await Promise.all([
+      readFile(installedPath),
+      readFile(packagedPath),
+    ]);
+    expect(installed.equals(packaged)).toBe(true);
   });
 
   test("does not fail when no agents are provided", async () => {

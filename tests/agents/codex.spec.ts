@@ -23,24 +23,13 @@ describe("codex descriptor", () => {
 });
 
 describe("installSkill", () => {
-  test("writes SKILL.md to skills/scout/ directory", async () => {
+  test("writes the provided skill byte-for-byte to skills/scout/SKILL.md", async () => {
     const agentsDir = join(tmpDir, ".agents");
-    await codex.installSkill("/home/user/.scout/repos", agentsDir);
+    const skillContent = "---\nname: scout\n---\n";
+    await codex.installSkill(skillContent, agentsDir);
 
     const content = await readFile(join(agentsDir, "skills", "scout", "SKILL.md"), "utf-8");
-    expect(content).toContain("scout list");
-    expect(content).toContain("scout list <query>");
-    expect(content).toContain("/home/user/.scout/repos");
-  });
-
-  test("includes YAML frontmatter with name and description", async () => {
-    const agentsDir = join(tmpDir, ".agents");
-    await codex.installSkill("/home/user/.scout/repos", agentsDir);
-
-    const content = await readFile(join(agentsDir, "skills", "scout", "SKILL.md"), "utf-8");
-    expect(content).toMatch(/^---\n/);
-    expect(content).toContain("name: scout");
-    expect(content).toContain("description:");
+    expect(content).toBe(skillContent);
   });
 });
 

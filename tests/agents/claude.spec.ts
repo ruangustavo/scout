@@ -23,14 +23,13 @@ describe("claude descriptor", () => {
 });
 
 describe("installSkill", () => {
-  test("writes skill file to commands/scout.md", async () => {
+  test("writes the provided skill byte-for-byte to commands/scout.md", async () => {
     const claudeDir = join(tmpDir, ".claude");
-    await claude.installSkill("/home/user/.scout/repos", claudeDir);
+    const skillContent = "---\nname: scout\n---\n";
+    await claude.installSkill(skillContent, claudeDir);
 
     const content = await readFile(join(claudeDir, "commands", "scout.md"), "utf-8");
-    expect(content).toContain("scout list");
-    expect(content).toContain("scout list <query>");
-    expect(content).toContain("/home/user/.scout/repos");
+    expect(content).toBe(skillContent);
   });
 });
 

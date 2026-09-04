@@ -3,6 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { saveConfig, emptyConfig } from "../config.ts";
 import type { ScoutPaths } from "../paths.ts";
 import type { AgentModule } from "../agents/descriptor.ts";
+import { readSkill } from "../skill.ts";
 
 export async function setupAction(
   scoutPaths: ScoutPaths,
@@ -26,8 +27,10 @@ export async function setupAction(
     );
   }
 
+  const skillContent = await readSkill();
+
   for (const agent of detectedAgents) {
-    await agent.installSkill(scoutPaths.reposDir);
+    await agent.installSkill(skillContent);
     console.log(pc.green("✓"), `Installed skill for ${agent.descriptor.displayName}`);
 
     await agent.injectInstructions(scoutPaths.reposDir);

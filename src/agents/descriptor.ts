@@ -10,7 +10,7 @@ export interface AgentDescriptor {
 
 export interface AgentModule {
   descriptor: AgentDescriptor;
-  installSkill(reposDir: string): Promise<void>;
+  installSkill(skillContent: string): Promise<void>;
   injectInstructions(reposDir: string): Promise<void>;
 }
 

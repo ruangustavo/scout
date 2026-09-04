@@ -13,37 +13,6 @@ export const descriptor: AgentDescriptor = {
   ],
 };
 
-function generateSkillContent(reposDir: string): string {
-  return `---
-name: scout
-description: Query cached source code repositories managed by Scout
----
-
-# Scout - Source Code Query
-
-You have access to locally cached GitHub repositories via Scout.
-
-## Available Repos
-
-Run \`scout list\` to see all cached repositories and their locations.
-Run \`scout list <query>\` to filter cached repositories by a case-insensitive name match when there are many.
-
-## Querying a Repo
-
-1. If a specific repo is mentioned, use that. Otherwise, infer the relevant repo from conversation context (library names, imports, API mentions).
-2. Run \`scout update <repo-name>\` to ensure the code is fresh.
-3. Search files and read source code in the repo's directory to answer the question.
-4. If the repo isn't cached, suggest: \`scout add <github-url>\`
-5. If multiple repos could match, ask the user which one.
-
-## Repo Directory
-
-All repos are stored at: ${reposDir}
-
-Each repo is at: ${reposDir}/<owner>/<repo>
-`;
-}
-
 function generateInstructionsSection(reposDir: string): string {
   return `## Scout - Source Code Repository Cache
 
@@ -51,10 +20,10 @@ You have access to locally cached source code repositories managed by Scout. Whe
 `;
 }
 
-export async function installSkill(reposDir: string, baseDir?: string): Promise<void> {
+export async function installSkill(skillContent: string, baseDir?: string): Promise<void> {
   const dir = join(baseDir ?? join(homedir(), ".agents"), "skills", "scout");
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, "SKILL.md"), generateSkillContent(reposDir), "utf-8");
+  await writeFile(join(dir, "SKILL.md"), skillContent, "utf-8");
 }
 
 export async function injectInstructions(reposDir: string, baseDir?: string): Promise<void> {
