@@ -1,6 +1,6 @@
 # Scout
 
-Scout is a CLI tool that maintains a local cache of GitHub repositories for AI coding agents. It gives agents like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex) direct filesystem access to library source code, so they can answer questions about internals, trace implementations, and read documentation without relying on web searches or stale training data.
+Scout is a CLI tool that maintains a local cache of GitHub repositories for coding agents. It gives agents direct filesystem access to library source code, so they can answer questions about internals, trace implementations, and read documentation without relying on web searches or stale training data.
 
 ## Why
 
@@ -26,28 +26,20 @@ This makes the `scout` command available globally.
 
 ## Setup
 
-Run setup to initialize Scout and configure your installed agents:
+Run setup to initialize Scout and install its skill:
 
 ```bash
 scout setup
 ```
 
-This will:
-
-1. Create the `~/.scout/` directory and config file.
-2. Detect which agents are installed (Claude Code, Codex).
-3. Install a skill file for each detected agent so it knows how to query cached repos.
-4. Inject passive instructions into the agent's global config so it automatically checks the cache when you ask about a library.
+This creates the `~/.scout/` cache and config, then installs Scout's canonical skill. Re-running setup is safe.
 
 ### What gets installed
 
-**Claude Code** (`~/.claude/`):
-- `~/.claude/commands/scout.md` -- a slash command (`/scout`) the agent can invoke.
-- A section appended to `~/.claude/CLAUDE.md` that teaches the agent to check the Scout cache when answering source code questions.
+- `~/.agents/skills/scout/SKILL.md` -- the canonical Scout skill, read directly by Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Amp, Cline, Zed, Warp, Antigravity, and other harnesses that discover `.agents/skills`.
+- `~/.claude/skills/scout -> ../../.agents/skills/scout` -- a relative symlink created when `~/.claude` exists, allowing Claude Code to discover the same skill.
 
-**Codex** (`~/.codex/` or `$CODEX_HOME`):
-- `~/.agents/skills/scout/SKILL.md` -- a skill file Codex can discover.
-- A section appended to `~/.codex/AGENTS.md` with passive instructions for cache awareness.
+Scout does not modify `CLAUDE.md` or `AGENTS.md`. If a real file or directory already exists at Claude Code's skill path, setup warns and leaves it untouched.
 
 ## Commands
 
@@ -92,43 +84,29 @@ scout remove honojs/hono
 
 ### `scout setup`
 
-Initialize Scout and install agent skills. Safe to re-run -- it will not duplicate instructions.
+Initialize Scout and install its canonical skill. Safe to re-run.
 
 ```bash
 scout setup
 ```
 
-## Usage with Claude Code
+## Usage
 
-After running `scout setup`, Claude Code gains two capabilities:
+After running `scout setup`, supported harnesses discover the Scout skill automatically. Ask about a library's source naturally:
 
-1. **Passive awareness.** When you ask about a library's source code, Claude Code will automatically check if the repo is cached and read from it. No special syntax required -- just ask naturally:
+```
+> How does Hono's router match routes?
+> What does the `createApp` function in Next.js actually do?
+```
 
-   ```
-   > How does Hono's router match routes?
-   > What does the `createApp` function in Next.js actually do?
-   ```
-
-2. **The `/scout` slash command.** You can explicitly invoke it to query a cached repo:
-
-   ```
-   > /scout How does Hono handle middleware?
-   ```
-
-If a repo isn't cached, the agent will suggest running `scout add <url>`.
-
-## Usage with Codex
-
-After running `scout setup`, Codex discovers the Scout skill automatically. It works the same way -- ask about a library and the agent will check the cache, update if needed, and read the source to answer.
-
-If Codex uses a custom home directory, set the `CODEX_HOME` environment variable before running setup so Scout can detect it.
+The agent will check the cache, update a cached repository before reading it, or add a repository that is not cached.
 
 ## How it works
 
 - Repos are shallow-cloned (`--depth=1`, `--single-branch`, `--no-tags`) to keep disk usage low.
 - Updates use `git fetch --depth=1` followed by `git reset --hard` to the remote HEAD.
 - Config is stored in `~/.scout/config.json` with repo metadata and timestamps.
-- Agent detection is based on the existence of known config directories (`~/.claude/`, `~/.codex/`).
+- Harnesses discover the canonical skill from `~/.agents/skills`; Claude Code uses the setup-created symlink.
 
 ## Development
 

@@ -1,13 +1,14 @@
-import pc from "picocolors";
 import { mkdir, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import pc from "picocolors";
 import { saveConfig, emptyConfig } from "../config.ts";
+import { installClaudeSkill } from "../harnesses/claude.ts";
 import type { ScoutPaths } from "../paths.ts";
-import type { AgentModule } from "../agents/descriptor.ts";
-import { readSkill } from "../skill.ts";
+import { installCanonicalSkill, readSkill } from "../skill.ts";
 
 export async function setupAction(
   scoutPaths: ScoutPaths,
-  detectedAgents: AgentModule[],
+  homeDir: string = homedir(),
 ): Promise<void> {
   await mkdir(scoutPaths.reposDir, { recursive: true });
 
@@ -20,21 +21,13 @@ export async function setupAction(
     console.log(pc.green("✓"), "Created config at", pc.dim(scoutPaths.configPath));
   }
 
-  if (detectedAgents.length === 0) {
-    console.log(
-      pc.yellow("⚠"),
-      "No supported agents detected. Supported agents: Claude Code, Codex",
-    );
-  }
-
   const skillContent = await readSkill();
+  const skillPath = await installCanonicalSkill(homeDir, skillContent);
+  console.log(pc.green("✓"), "Installed skill at", pc.dim(skillPath));
 
-  for (const agent of detectedAgents) {
-    await agent.installSkill(skillContent);
-    console.log(pc.green("✓"), `Installed skill for ${agent.descriptor.displayName}`);
-
-    await agent.injectInstructions(scoutPaths.reposDir);
-    console.log(pc.green("✓"), `Injected instructions for ${agent.descriptor.displayName}`);
+  const claudeWarning = await installClaudeSkill(homeDir);
+  if (claudeWarning !== undefined) {
+    console.warn(`${pc.yellow("⚠")} ${claudeWarning}`);
   }
 
   console.log(
