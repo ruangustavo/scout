@@ -43,10 +43,18 @@ describe("addAction", () => {
 
     await addAction(bareRepoPath, paths, "test/repo");
 
+    const { stdout: revision } = await execFile(
+      "git",
+      ["--git-dir", bareRepoPath, "rev-parse", "refs/heads/main"],
+    );
     const config = await loadConfig(paths.configPath);
     expect(config.repos).toHaveLength(1);
-    expect(config.repos[0]!.name).toBe("test/repo");
-    expect(config.repos[0]!.branch).toBe("main");
+    const entry = config.repos[0];
+    expect(entry).toBeDefined();
+    if (entry === undefined) throw new Error("Expected the added repository in config");
+    expect(entry.name).toBe("test/repo");
+    expect(entry.reference).toEqual({ kind: "branch", name: "main" });
+    expect(entry.revision).toBe(revision.trim());
   });
 
   test("warns when repo is already cached", async () => {
@@ -55,12 +63,17 @@ describe("addAction", () => {
     await mkdir(join(scoutDir, "repos"), { recursive: true });
     const paths = resolveScoutPaths(scoutDir);
 
+    const { stdout: revision } = await execFile(
+      "git",
+      ["--git-dir", bareRepoPath, "rev-parse", "refs/heads/main"],
+    );
     const entry: RepoEntry = {
       name: "test/repo",
       url: bareRepoPath,
       path: join(paths.reposDir, "test", "repo"),
-      branch: "main",
       lastUpdated: new Date().toISOString(),
+      reference: { kind: "branch", name: "main" },
+      revision: revision.trim(),
     };
     await saveConfig(paths.configPath, addRepo(emptyConfig(), entry));
 

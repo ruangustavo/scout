@@ -1,10 +1,11 @@
 import pc from "picocolors";
-import { rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, saveConfig, findRepo, addRepo } from "../config.ts";
-import { parseGitHubUrl, cloneRepo, detectBranch } from "../repo.ts";
+import { parseGitHubUrl, cloneRepo, resolveReference } from "../repo.ts";
 import { createSpinner } from "../spinner.ts";
 import type { ScoutPaths } from "../paths.ts";
+import type { GitReference } from "../reference.ts";
 
 export function resolveRepoName(url: string): string {
   const { owner, repo } = parseGitHubUrl(url);
@@ -15,41 +16,32 @@ export async function addAction(
   url: string,
   paths: ScoutPaths,
   nameOverride?: string,
+  selection?: GitReference,
 ): Promise<void> {
   const name = nameOverride ?? resolveRepoName(url);
-  const config = await loadConfig(paths.configPath);
-
-  if (findRepo(config, name)) {
-    console.log(pc.yellow(`Repository ${pc.bold(name)} is already cached.`));
+  const [config, reference] = await Promise.all([
+    loadConfig(paths.configPath), resolveReference(url, selection),
+  ]);
+  const label = `${name} (${reference.kind}: ${reference.name})`;
+  const existing = findRepo(config, name, reference);
+  if (existing) {
+    console.log(pc.yellow(`Repository ${pc.bold(label)} is already cached at ${existing.path}.`));
     return;
   }
 
-  const destPath = join(paths.reposDir, ...name.split("/"));
-
-  const spinner = createSpinner(`Cloning ${pc.cyan(name)}...`);
-
+  await mkdir(paths.reposDir, { recursive: true });
+  const destPath = await mkdtemp(join(paths.reposDir, "reference-"));
+  const spinner = createSpinner(`Caching ${pc.cyan(label)}...`);
   try {
-    await cloneRepo(url, destPath);
+    const snapshot = await cloneRepo(url, destPath, reference);
+    await saveConfig(paths.configPath, addRepo(config, {
+      name, url, path: destPath, ...snapshot, lastUpdated: new Date().toISOString(),
+    }));
   } catch (error) {
+    await rm(destPath, { recursive: true, force: true });
+    throw error;
+  } finally {
     spinner.stop();
-    await rm(destPath, { recursive: true, force: true }).catch(() => {});
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(pc.red(`Failed to clone ${pc.bold(name)}:`), message);
-    return;
   }
-
-  spinner.stop();
-
-  const branch = await detectBranch(destPath);
-
-  const updated = addRepo(config, {
-    name,
-    url,
-    path: destPath,
-    branch,
-    lastUpdated: new Date().toISOString(),
-  });
-
-  await saveConfig(paths.configPath, updated);
-  console.log(pc.green("✓"), `Added ${pc.bold(name)} (branch: ${branch})`);
+  console.log(pc.green("✓"), `Added ${pc.bold(label)} at ${destPath}`);
 }

@@ -1,10 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
-import { parseGitHubUrl, isStale, cloneRepo, updateRepo, detectBranch } from "@/repo.ts";
+import { parseGitHubUrl, isStale, cloneRepo } from "@/repo.ts";
+
+import { updateAction } from "@/commands/update.ts";
+import { loadConfig, saveConfig } from "@/config.ts";
+import { resolveScoutPaths } from "@/paths.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -88,14 +92,14 @@ describe("git operations", () => {
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "scout-repo-test-"));
     bareRepoPath = join(tmpDir, "bare-repo.git");
-    clonedRepoPath = join(tmpDir, "cloned-repo");
+    clonedRepoPath = join(tmpDir, "cache", "repos", "cloned-repo");
 
     const workDir = join(tmpDir, "work");
     await execFile("git", ["init", workDir]);
     await execFile("git", ["checkout", "-b", "main"], { cwd: workDir });
     await execFile("git", ["-C", workDir, "config", "user.email", "test@test.com"]);
     await execFile("git", ["-C", workDir, "config", "user.name", "Test"]);
-    await writeFile(join(workDir, "README.md"), "# Test Repo");
+    await Bun.write(join(workDir, "README.md"), "# Test Repo");
     await execFile("git", ["add", "."], { cwd: workDir });
     await execFile("git", ["commit", "-m", "initial commit"], { cwd: workDir });
     await execFile("git", ["clone", "--bare", workDir, bareRepoPath]);
@@ -107,32 +111,39 @@ describe("git operations", () => {
 
   test("cloneRepo clones a repository to the destination path", async () => {
     await cloneRepo(bareRepoPath, clonedRepoPath);
-    const readme = await readFile(join(clonedRepoPath, "README.md"), "utf-8");
+    const readme = await Bun.file(join(clonedRepoPath, "README.md")).text();
     expect(readme).toBe("# Test Repo");
   });
 
-  test("detectBranch returns the default branch name", async () => {
-    await cloneRepo(bareRepoPath, clonedRepoPath);
-    const branch = await detectBranch(clonedRepoPath);
-    expect(branch).toBe("main");
+  test("cloning without a selector records the resolved default branch", async () => {
+    const { reference, revision } = await cloneRepo(bareRepoPath, clonedRepoPath);
+    const { stdout } = await execFile("git", ["rev-parse", "main"], { cwd: bareRepoPath });
+    expect(reference).toEqual({ kind: "branch", name: "main" });
+    expect(revision).toBe(stdout.trim());
   });
 
-  test("updateRepo fetches and resets to latest", async () => {
-    await cloneRepo(bareRepoPath, clonedRepoPath);
-    const branch = await detectBranch(clonedRepoPath);
+  test("updating a cached branch publishes newly added source files", async () => {
+    const snapshot = await cloneRepo(bareRepoPath, clonedRepoPath);
+    const paths = resolveScoutPaths(join(tmpDir, "cache"));
+    await saveConfig(paths.configPath, { repos: [{
+      name: "test/repo", url: bareRepoPath, path: clonedRepoPath,
+      ...snapshot, lastUpdated: "2000-01-01T00:00:00.000Z",
+    }] });
 
     const pushDir = join(tmpDir, "push-work");
     await execFile("git", ["clone", bareRepoPath, pushDir]);
-    await writeFile(join(pushDir, "NEW.md"), "new content");
+    await Bun.write(join(pushDir, "NEW.md"), "new content");
     await execFile("git", ["-C", pushDir, "config", "user.email", "test@test.com"]);
     await execFile("git", ["-C", pushDir, "config", "user.name", "Test"]);
     await execFile("git", ["add", "."], { cwd: pushDir });
     await execFile("git", ["commit", "-m", "second commit"], { cwd: pushDir });
     await execFile("git", ["push"], { cwd: pushDir });
 
-    await updateRepo(clonedRepoPath, branch);
-
-    const newFile = await readFile(join(clonedRepoPath, "NEW.md"), "utf-8");
+    await updateAction("test/repo", paths);
+    const { repos } = await loadConfig(paths.configPath);
+    const entry = repos[0];
+    if (!entry) throw new Error("Expected updated repository");
+    const newFile = await Bun.file(join(entry.path, "NEW.md")).text();
     expect(newFile).toBe("new content");
   });
 });

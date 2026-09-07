@@ -11,16 +11,18 @@ const SAMPLE_ENTRY: RepoEntry = {
   name: "honojs/hono",
   url: "https://github.com/honojs/hono",
   path: "/tmp/.scout/repos/honojs/hono",
-  branch: "main",
   lastUpdated: "2026-03-28T15:00:00.000Z",
+  reference: { kind: "branch", name: "main" },
+  revision: "0123456789abcdef0123456789abcdef01234567",
 };
 
 const SECOND_ENTRY: RepoEntry = {
   name: "vercel/next.js",
   url: "https://github.com/vercel/next.js",
   path: "/tmp/.scout/repos/vercel/next.js",
-  branch: "canary",
   lastUpdated: "2026-03-28T16:00:00.000Z",
+  reference: { kind: "branch", name: "canary" },
+  revision: "abcdef0123456789abcdef0123456789abcdef01",
 };
 
 let tmpDir: string;
@@ -57,7 +59,11 @@ describe("listAction", () => {
 
     await listAction(paths);
 
-    expect(logs.some((l) => l.includes("honojs/hono"))).toBe(true);
+    const output = logs.join("\n");
+    expect(output).toContain("honojs/hono");
+    expect(output).toContain("branch: main");
+    expect(output).toContain("0123456789abcdef0123456789abcdef01234567");
+    expect(output).toContain("/tmp/.scout/repos/honojs/hono");
   });
 
   test("filters repos by substring", async () => {

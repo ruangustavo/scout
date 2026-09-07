@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -16,8 +16,9 @@ const SAMPLE_ENTRY: RepoEntry = {
   name: "honojs/hono",
   url: "https://github.com/honojs/hono",
   path: "/tmp/test/.scout/repos/honojs/hono",
-  branch: "main",
   lastUpdated: "2026-03-28T15:00:00.000Z",
+  reference: { kind: "branch", name: "main" },
+  revision: "0123456789abcdef0123456789abcdef01234567",
 };
 
 let tmpDir: string;
@@ -50,6 +51,80 @@ describe("saveConfig and loadConfig", () => {
   test("loadConfig returns empty config when file does not exist", async () => {
     const config = await loadConfig(join(tmpDir, "missing.json"));
     expect(config).toEqual({ repos: [] });
+  });
+
+  const invalidConfigs: Array<{ name: string; config: unknown }> = [
+    { name: "an empty repository name", config: { repos: [{ ...SAMPLE_ENTRY, name: "" }] } },
+    { name: "an empty repository URL", config: { repos: [{ ...SAMPLE_ENTRY, url: "" }] } },
+    { name: "an empty cache path", config: { repos: [{ ...SAMPLE_ENTRY, path: "" }] } },
+    {
+      name: "an invalid update date",
+      config: { repos: [{ ...SAMPLE_ENTRY, lastUpdated: "not-a-date" }] },
+    },
+    {
+      name: "an invalid Git reference",
+      config: { repos: [{ ...SAMPLE_ENTRY, reference: { kind: "branch", name: "bad..branch" } }] },
+    },
+    {
+      name: "a commit reference that differs from its revision",
+      config: {
+        repos: [{
+          ...SAMPLE_ENTRY,
+          reference: { kind: "commit", name: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        }],
+      },
+    },
+    {
+      name: "the legacy branch-only format",
+      config: {
+        repos: [{
+          name: SAMPLE_ENTRY.name,
+          url: SAMPLE_ENTRY.url,
+          path: SAMPLE_ENTRY.path,
+          branch: "main",
+          lastUpdated: SAMPLE_ENTRY.lastUpdated,
+        }],
+      },
+    },
+  ];
+
+  for (const { name, config } of invalidConfigs) {
+    test(`rejects ${name} without modifying the file`, async () => {
+      const contents = JSON.stringify(config);
+      await Bun.write(configPath, contents);
+
+      await expect(loadConfig(configPath)).rejects.toThrow();
+
+      expect(await Bun.file(configPath).text()).toBe(contents);
+    });
+  }
+
+  test("normalizes an uppercase commit reference", async () => {
+    const revision = "abcdef0123456789abcdef0123456789abcdef01";
+    await Bun.write(configPath, JSON.stringify({
+      repos: [{
+        ...SAMPLE_ENTRY,
+        reference: { kind: "commit", name: revision.toUpperCase() },
+        revision,
+      }],
+    }));
+
+    const loaded = await loadConfig(configPath);
+
+    expect(loaded.repos[0]?.reference).toEqual({ kind: "commit", name: revision });
+  });
+
+  test("does not replace an existing config when atomic staging fails", async () => {
+    const original = JSON.stringify({ repos: [SAMPLE_ENTRY] });
+    await Bun.write(configPath, original);
+    await chmod(tmpDir, 0o555);
+    try {
+      await expect(saveConfig(configPath, { repos: [] })).rejects.toThrow();
+    } finally {
+      await chmod(tmpDir, 0o755);
+    }
+
+    expect(await Bun.file(configPath).text()).toBe(original);
   });
 });
 

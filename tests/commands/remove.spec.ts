@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -30,12 +30,13 @@ describe("removeAction", () => {
       name: "honojs/hono",
       url: "https://github.com/honojs/hono",
       path: repoDir,
-      branch: "main",
       lastUpdated: new Date().toISOString(),
+      reference: { kind: "branch", name: "main" },
+      revision: "0123456789abcdef0123456789abcdef01234567",
     };
     await saveConfig(paths.configPath, addRepo(emptyConfig(), entry));
 
-    await removeAction("honojs/hono", paths);
+    await removeAction("honojs/hono", paths, { kind: "branch", name: "main" });
 
     const config = await loadConfig(paths.configPath);
     expect(config.repos).toHaveLength(0);
@@ -44,20 +45,12 @@ describe("removeAction", () => {
     expect(dirExists).toBe(false);
   });
 
-  test("prints error when repo not found", async () => {
+  test("throws when repo not found", async () => {
     const scoutDir = join(tmpDir, ".scout");
     const paths = resolveScoutPaths(scoutDir);
     await mkdir(paths.reposDir, { recursive: true });
     await saveConfig(paths.configPath, emptyConfig());
 
-    const errors: string[] = [];
-    const errorSpy = spyOn(console, "error").mockImplementation((...args: unknown[]) => {
-      errors.push(args.join(" "));
-    });
-
-    await removeAction("unknown/repo", paths);
-
-    errorSpy.mockRestore();
-    expect(errors.some((e) => e.includes("not found"))).toBe(true);
+    await expect(removeAction("unknown/repo", paths)).rejects.toThrow("not found");
   });
 });
