@@ -27,6 +27,8 @@ export async function listAction(paths: ScoutPaths, query?: string): Promise<voi
     const updated = new Date(repo.lastUpdated).toLocaleString();
     console.log(`  ${pc.green(repo.name)}`);
     console.log(`    URL:     ${repo.url}`);
+    console.log(`    Ref:     ${repo.reference.kind}: ${repo.reference.name}`);
+    console.log(`    Commit:  ${repo.revision}`);
     console.log(`    Path:    ${repo.path}`);
     console.log(`    Updated: ${updated}\n`);
   }

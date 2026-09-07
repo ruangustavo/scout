@@ -17,13 +17,13 @@ The single document Scout installs that tells an agent when and how to read from
 _Avoid_: Slash command, instructions, prompt, template
 
 **Cache**:
-The set of repositories Scout has cloned locally.
+The collection of repository source code kept locally for consultation, not installed packages or executable artifacts.
 _Avoid_: Store, library
 
 **Cached repository**:
-One repository in the cache, identified by `owner/repo`.
+The source code of a repository at a selected branch, tag, or commit, identified by repository, reference kind, and full reference. Different references of the same repository can coexist in the cache; branches track remote changes, while tags and commits preserve the revision originally obtained.
 _Avoid_: Repo entry, clone
 
 **Stale**:
-A cached repository whose last update is older than the staleness window and should be refreshed before being read.
+A cached repository tracking a branch whose last update is older than the staleness window and should be refreshed before being read. Cached tags and commits are fixed snapshots, not stale merely because time has passed.
 _Avoid_: Outdated, old
