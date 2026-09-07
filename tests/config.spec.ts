@@ -53,6 +53,35 @@ describe("saveConfig and loadConfig", () => {
     expect(config).toEqual({ repos: [] });
   });
 
+  test("keeps malformed JSON as a SyntaxError", async () => {
+    await Bun.write(configPath, "{");
+    await expect(loadConfig(configPath)).rejects.toBeInstanceOf(SyntaxError);
+  });
+
+  test("discards extra properties at every object level", async () => {
+    await Bun.write(configPath, JSON.stringify({
+      extra: true,
+      repos: [{ ...SAMPLE_ENTRY, extra: true, reference: { ...SAMPLE_ENTRY.reference, extra: true } }],
+    }));
+    expect(await loadConfig(configPath)).toEqual({ repos: [SAMPLE_ENTRY] });
+  });
+
+  test("accepts non-URL strings and Date.parse-compatible dates", async () => {
+    const entry = { ...SAMPLE_ENTRY, url: "not-a-url", lastUpdated: "March 28, 2026" };
+    await Bun.write(configPath, JSON.stringify({ repos: [entry] }));
+    expect(await loadConfig(configPath)).toEqual({ repos: [entry] });
+  });
+
+  for (const config of [null, [], {}, { repos: null }, { repos: [null] },
+    { repos: [{ ...SAMPLE_ENTRY, reference: { kind: "unknown", name: "main" } }] },
+    { repos: [{ ...SAMPLE_ENTRY, revision: SAMPLE_ENTRY.revision.toUpperCase() }] },
+    { repos: [{ ...SAMPLE_ENTRY, reference: { kind: "tag", name: "" } }] }]) {
+    test(`reports invalid structure with the config path: ${JSON.stringify(config)}`, async () => {
+      await Bun.write(configPath, JSON.stringify(config));
+      await expect(loadConfig(configPath)).rejects.toThrow(`Invalid Scout config: ${configPath}`);
+    });
+  }
+
   const invalidConfigs: Array<{ name: string; config: unknown }> = [
     { name: "an empty repository name", config: { repos: [{ ...SAMPLE_ENTRY, name: "" }] } },
     { name: "an empty repository URL", config: { repos: [{ ...SAMPLE_ENTRY, url: "" }] } },

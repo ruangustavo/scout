@@ -1,59 +1,29 @@
 import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { sameReference, type GitReference } from "./reference.ts";
+import { z } from "zod";
+import { gitReferenceSchema, sameReference, type GitReference } from "./reference.ts";
 import { validateReference } from "./repo.ts";
 
-export interface RepoEntry {
-  name: string;
-  url: string;
-  path: string;
-  lastUpdated: string;
-  reference: GitReference;
-  revision: string;
-}
+const repoEntrySchema = z.object({
+  name: z.string().min(1),
+  url: z.string().min(1),
+  path: z.string().min(1),
+  lastUpdated: z.string().refine((value) => Number.isFinite(Date.parse(value))),
+  reference: gitReferenceSchema,
+  revision: z.string().regex(/^(?:[\da-f]{40}|[\da-f]{64})$/),
+}).transform(async (entry): Promise<typeof entry> => ({
+  ...entry,
+  reference: await validateReference(entry.reference),
+})).refine((entry) => entry.reference.kind !== "commit" || entry.reference.name === entry.revision);
 
-export interface ScoutConfig {
-  repos: RepoEntry[];
-}
+const scoutConfigSchema = z.object({ repos: z.array(repoEntrySchema) });
+
+export type RepoEntry = z.infer<typeof repoEntrySchema>;
+export type ScoutConfig = z.infer<typeof scoutConfigSchema>;
 
 /** Returns a fresh object each call to prevent shared-reference mutation bugs. */
 export function emptyConfig(): ScoutConfig {
   return { repos: [] };
-}
-
-function parseReference(value: unknown): GitReference | undefined {
-  if (typeof value !== "object" || value === null
-    || !("kind" in value) || !("name" in value)
-    || (value.kind !== "branch" && value.kind !== "tag" && value.kind !== "commit")
-    || typeof value.name !== "string" || value.name.length === 0) return undefined;
-  return { kind: value.kind, name: value.name };
-}
-
-async function parseRepoEntry(value: unknown): Promise<RepoEntry | undefined> {
-  if (typeof value !== "object" || value === null
-    || !("name" in value) || typeof value.name !== "string" || value.name.length === 0
-    || !("url" in value) || typeof value.url !== "string" || value.url.length === 0
-    || !("path" in value) || typeof value.path !== "string" || value.path.length === 0
-    || !("lastUpdated" in value) || typeof value.lastUpdated !== "string"
-    || !Number.isFinite(Date.parse(value.lastUpdated))
-    || !("revision" in value) || typeof value.revision !== "string"
-    || !/^(?:[\da-f]{40}|[\da-f]{64})$/.test(value.revision)
-    || !("reference" in value)) return undefined;
-
-  const reference = parseReference(value.reference);
-  if (reference === undefined) return undefined;
-  const normalizedReference = await validateReference(reference);
-  if (normalizedReference.kind === "commit" && normalizedReference.name !== value.revision) {
-    return undefined;
-  }
-  return {
-    name: value.name,
-    url: value.url,
-    path: value.path,
-    lastUpdated: value.lastUpdated,
-    reference: normalizedReference,
-    revision: value.revision,
-  };
 }
 
 export async function loadConfig(configPath: string): Promise<ScoutConfig> {
@@ -65,15 +35,11 @@ export async function loadConfig(configPath: string): Promise<ScoutConfig> {
     throw error;
   }
   const value: unknown = JSON.parse(raw);
-  if (typeof value !== "object" || value === null || !("repos" in value)
-    || !Array.isArray(value.repos)) {
+  const result = await scoutConfigSchema.safeParseAsync(value);
+  if (!result.success) {
     throw new Error(`Invalid Scout config: ${configPath}`);
   }
-  const repos = await Promise.all(value.repos.map(parseRepoEntry));
-  if (repos.some((entry) => entry === undefined)) {
-    throw new Error(`Invalid Scout config: ${configPath}`);
-  }
-  return { repos: repos.filter((entry) => entry !== undefined) };
+  return result.data;
 }
 
 export async function saveConfig(configPath: string, config: ScoutConfig): Promise<void> {
